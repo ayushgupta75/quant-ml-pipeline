@@ -1,0 +1,91 @@
+symbols:
+  - AAPL
+  - MSFT
+  - AMZN
+  - NVDA
+  - GOOGL
+  - GOOG
+  - META
+  - TSLA
+  - BRK-B
+  - JPM
+  - V
+  - MA
+  - UNH
+  - XOM
+  - CVX
+  - PFE
+  - MRK
+  - ABBV
+  - JNJ
+  - PG
+  - KO
+  - PEP
+  - WMT
+  - COST
+  - HD
+  - LOW
+  - DIS
+  - NFLX
+  - ADBE
+  - CRM
+  - ORCL
+  - IBM
+  - INTC
+  - AMD
+  - QCOM
+  - AVGO
+  - CSCO
+  - TXN
+  - TMO
+  - ABT
+  - CAT
+  - BA
+  - GE
+  - NKE
+  - MCD
+  - SBUX
+  - LMT
+  - GS
+  - BAC
+  - C
+start_date: "2016-01-01"
+end_date: null
+
+horizon_days: 5
+task: "classification"  # classification or regression
+
+features:
+  returns_windows: [1, 5, 10, 20]
+  vol_windows: [5, 10, 20]
+  ma_windows: [10, 20, 50]
+  rsi_window: 14
+
+news:
+  per_symbol_yahoo: true
+  yahoo_region: "US"
+  yahoo_lang: "en-US"
+
+  global_rss_feeds:
+    - "https://www.marketwatch.com/rss/topstories"
+
+  lookback_days: 1
+  lag_days: 1
+
+walk_forward:
+  train_days: 1260
+  test_days: 63
+  step_days: 63
+
+mlflow:
+  tracking_uri: "sqlite:///mlflow.db"
+  experiment_name: "fin-ml-platform"
+
+deep:
+  lookback: 60
+  batch_size: 256
+  epochs: 10
+  lr: 0.001
+  hidden: 64
+  kernel: 3
+  dropout: 0.1
