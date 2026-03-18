@@ -5,6 +5,7 @@ import mlflow
 import argparse
 from pathlib import Path
 import numpy as np
+import joblib
 
 from src.datasets import make_seq_train_test
 from src.train_deep import train_tcn
@@ -123,6 +124,10 @@ def run(cfg_path="config.yaml"):
     wf = cfg["walk_forward"]
     results = []
 
+    # --- Deployment selection (ONLY for deployment)
+    best_score = -1e9
+    best_bundle = None
+
     for train_df, test_df, (train_end, test_end) in walk_forward_splits(
         feat_df, wf["train_days"], wf["test_days"], wf["step_days"]
     ):
@@ -161,6 +166,46 @@ def run(cfg_path="config.yaml"):
                 **tcn_out,
             })
 
+            # --- Update best deployable model bundle (deployment only)
+            if cfg["task"] == "classification":
+                base_auc = float(base_metrics.get("auc", -1.0))
+                if base_auc > best_score:
+                    best_score = base_auc
+                    best_bundle = {
+                        "kind": "baseline",
+                        "model": base_model,
+                        "feature_cols": feature_cols,
+                        "threshold": 0.5,
+                        "score": best_score,
+                    }
+
+                # Prefer TCN if it beats current best (and exists)
+                if "tcn_metrics" in locals():
+                    tcn_auc = float(tcn_metrics.get("auc", -1.0))
+                    if tcn_auc > best_score:
+                        best_score = tcn_auc
+                        best_bundle = {
+                            "kind": "tcn",
+                            "model": tcn_model,
+                            "feature_cols": feature_cols,
+                            "lookback": int(cfg["deep"]["lookback"]),
+                            "threshold": float(tcn_metrics.get("best_threshold", 0.5)),
+                            "score": best_score,
+                        }
+            else:
+                # regression: lower rmse is better -> store negative as "higher is better"
+                rmse = float(base_metrics.get("rmse", 1e9))
+                score = -rmse
+                if score > best_score:
+                    best_score = score
+                    best_bundle = {
+                        "kind": "baseline",
+                        "model": base_model,
+                        "feature_cols": feature_cols,
+                        "threshold": None,
+                        "score": best_score,
+                    }
+
     if not results:
         raise RuntimeError("No walk-forward splits produced. Reduce train_days/test_days or increase data history.")
 
@@ -169,6 +214,11 @@ def run(cfg_path="config.yaml"):
     out.to_csv("artifacts/walk_forward_results.csv", index=False)
     print(out.tail())
     print("Saved:", "artifacts/walk_forward_results.csv")
+
+    # --- Save best bundle for deployment (deployment only)
+    if best_bundle is not None:
+        joblib.dump(best_bundle, "artifacts/best_model.joblib")
+        print(f"Saved deploy bundle: artifacts/best_model.joblib (kind={best_bundle['kind']}, score={best_bundle['score']:.4f})")
 
 
 if __name__ == "__main__":
