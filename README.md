@@ -1,35 +1,166 @@
-# quant-ml-pipeline
+# Quant-ML Pipeline
 
-An end-to-end financial machine learning pipeline that ingests OHLCV + fundamentals + news signals, builds leakage-safe features, trains baseline ML models and a deep learning TCN (Temporal Convolutional Network), evaluates using walk-forward backtesting, tracks experiments with MLflow, and serves predictions via a FastAPI inference service.
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue?style=flat-square)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+[![Code style: Black](https://img.shields.io/badge/Code%20Style-Black-000?style=flat-square)](https://github.com/psf/black)
+![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-brightgreen?style=flat-square)
 
-Note: This is an educational/research project, not financial advice.
+An end-to-end production-ready financial machine learning pipeline for equities price direction prediction. Ingests OHLCV data, fundamentals, and news signals with leakage-safe feature engineering. Trains baseline ML and deep learning (TCN) models, evaluates via walk-forward backtesting, tracks experiments with MLflow, and serves predictions via FastAPI.
 
----
-
-## What this project does
-
-Data pipeline
-• Downloads/ingests OHLCV (price data) for multiple tickers
-• Pulls fundamentals (slow-moving features)
-• Builds news signals (per-symbol + optional global) and lags them to reduce leakage
-
-Modeling
-• Baseline model training (classification/regression)
-• Deep learning model: TCN for time-series direction prediction (classification)
-• Feature engineering: returns, volatility, moving averages, RSI, plus news features
-
-Evaluation
-• Leakage-safe walk-forward validation/backtesting
-• Metrics logged per split in MLflow
-• Saves results to artifacts/walk_forward_results.csv
-
-Deployment
-• Exports a deployable bundle: artifacts/best_model.joblib
-• Runs a FastAPI server with endpoints for health, predict, train trigger, reload
+**⚠️ Disclaimer**: This is an educational/research project. Not financial advice. Use at your own risk.
 
 ---
 
-## Repository structure
+## 📋 Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Monitoring & Tracking](#monitoring--tracking)
+- [API Reference](#api-reference)
+- [Design Principles](#design-principles)
+- [Future Work](#future-work)
+- [Contributing](#contributing)
+
+---
+
+## ✨ Features
+
+### Data Ingestion & Processing
+- **Multi-source data**: OHLCV (yfinance), fundamentals, sentiment signals
+- **News integration**: Per-symbol Yahoo Finance + global RSS feeds with configurable lags
+- **Leakage prevention**: Automatic lagging of news signals to avoid look-ahead bias
+- **Efficient caching**: Reduced redundant API calls through smart data management
+
+### Feature Engineering
+- **Technical indicators**: Returns (multiple windows), volatility, moving averages, RSI
+- **Sentiment features**: News-based sentiment scoring (VADER)
+- **Configurable windows**: All feature windows easily tunable via `config.yaml`
+
+### Modeling
+- **Baseline models**: Sklearn-based classification/regression (LightGBM, Random Forest, etc.)
+- **Deep learning**: Temporal Convolutional Networks (TCN) for time-series patterns
+- **Sequence generation**: Automatic windowed sequence creation for deep models
+
+### Backtesting & Evaluation
+- **Walk-forward validation**: Time-series aware, leakage-free train/test splits
+- **Rich metrics**: Sharpe ratio, hit rate, trade rate, average trade returns
+- **Experiment tracking**: MLflow integration for reproducibility and comparison
+- **Results export**: CSV reports for analysis and sharing
+
+### Deployment
+- **Model bundling**: Serialized models with feature metadata
+- **FastAPI service**: Production-ready REST API with async training support
+- **Docker support**: Easy containerization for cloud deployment
+- **Health checks**: Built-in model validation endpoints
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Python 3.11+
+- pip or conda
+
+### Installation
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/quant-ml-pipeline.git
+cd quant-ml-pipeline
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### Run Full Pipeline
+
+```bash
+# Default: trains on AAPL, MSFT, AMZN from config.yaml
+python -m src.backtest
+
+# Override tickers at runtime
+python -m src.backtest --symbols SPY,AAPL,MSFT,TSLA
+
+# Specify custom config
+python -m src.backtest --config custom_config.yaml
+```
+
+### Start API Server
+
+```bash
+# Start prediction server (runs on http://localhost:8080)
+uvicorn src.serve:app --host 0.0.0.0 --port 8080 --reload
+
+# In another terminal, check health
+curl http://localhost:8080/health
+```
+
+### View Experiment Results
+
+```bash
+# Start MLflow UI (runs on http://localhost:5001)
+mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5001
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+Data Acquisition
+    ↓
+┌─────────────────────────────────────┐
+│ 1. INGEST (ingest.py)              │
+│    - OHLCV via yfinance            │
+│    - Fundamentals                  │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 2. FEATURES (features.py)           │
+│    - Technical indicators           │
+│    - News sentiment (news.py)       │
+│    - Lag-aware construction         │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 3. SPLIT (split.py)                 │
+│    - Walk-forward windows           │
+│    - Time-aware train/test splits   │
+└─────────────────────────────────────┘
+    ↓
+┌──────────────────┬──────────────────┐
+│ 4a. BASELINE     │ 4b. DEEP LEARNING│
+│ (train_baseline) │ (train_deep.py)  │
+│ Sklearn models   │ TCN + PyTorch    │
+└──────────────────┴──────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 5. BACKTEST (backtest.py)           │
+│    - Walk-forward evaluation        │
+│    - MLflow tracking                │
+│    - Best model selection & export  │
+└─────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────┐
+│ 6. SERVE (serve.py)                 │
+│    - FastAPI REST endpoints         │
+│    - Model predictions              │
+│    - Async retraining               │
+└─────────────────────────────────────┘
+```
+
+---
+
+## 📁 Project Structure
 
 quant-ml-pipeline/
 • Dockerfile
